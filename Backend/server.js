@@ -29,13 +29,20 @@ const pool = mysql.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
 });
 
 // Initialize Clients
-const sessionClient = new dialogflow.SessionsClient(); 
+const sessionClient = new dialogflow.SessionsClient({
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    // The .replace() is crucial so the cloud server reads the hidden newline characters correctly
+    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') 
+  }
+});
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // ==========================================
