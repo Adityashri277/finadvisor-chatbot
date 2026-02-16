@@ -40,7 +40,7 @@ const sessionClient = new dialogflow.SessionsClient({
   credentials: {
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
     // The .replace() is crucial so the cloud server reads the hidden newline characters correctly
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') 
+    private_key: process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined
   }
 });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -107,13 +107,16 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/chat", async (req, res) => {
   const { text, sessionId = "finadvisor-session-123" } = req.body;
 
+  // 1. Check if the message is empty
   if (!text) {
     return res.status(400).json({ error: "Message text is required" });
   }
 
   try {
-    // 1. Send text to Dialogflow
-    const projectId = require("./" + process.env.GOOGLE_APPLICATION_CREDENTIALS).project_id;
+    // 2. Define the Project ID directly
+    const projectId = process.env.GOOGLE_PROJECT_ID; 
+
+    // 3. Create the session path
     const sessionPath = sessionClient.projectAgentSessionPath(projectId, sessionId);
 
     const request = {
@@ -121,13 +124,14 @@ app.post("/api/chat", async (req, res) => {
       queryInput: { text: { text: text, languageCode: "en-US" } },
     };
 
+    // 4. Send text to Dialogflow
     const [response] = await sessionClient.detectIntent(request);
     const result = response.queryResult;
     const intentName = result.intent ? result.intent.displayName : "Unknown";
 
     let finalReply = result.fulfillmentText;
 
-    // 2. Route based on Intent
+    // 5. Route based on Intent (NOW SAFELY INSIDE THE ROUTE!)
     if (intentName === "GetStockPrice") {
       const rawSymbol = result.parameters.fields.StockTicker ? result.parameters.fields.StockTicker.stringValue : null;
       const searchQuery = rawSymbol ? rawSymbol.trim() : null;
@@ -185,7 +189,7 @@ app.post("/api/chat", async (req, res) => {
       finalReply = aiResult.response.text();
     }
 
-    // 3. SECURELY Save the conversation to MySQL
+    // 6. SECURELY Save the conversation to MySQL
     try {
       let userId = null;
       const authHeader = req.headers.authorization;
@@ -202,11 +206,12 @@ app.post("/api/chat", async (req, res) => {
       console.error("Database Save Error:", dbError.message);
     }
 
-    res.json({ reply: finalReply, intent: intentName });
+    // 7. Send the successful reply back to your React frontend
+    return res.json({ reply: finalReply, intent: intentName });
 
   } catch (error) {
     console.error("Chat API Error:", error);
-    res.status(500).json({ error: "Internal server error processing your request." });
+    return res.status(500).json({ error: "System error: Cannot reach the backend server." });
   }
 });
 
@@ -239,5 +244,5 @@ app.get("/api/history", async (req, res) => {
 
 // Start the Server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running securely on http://localhost:${PORT}`);
+  console.log(`🚀 Server running securely on port ${PORT}`);
 });
