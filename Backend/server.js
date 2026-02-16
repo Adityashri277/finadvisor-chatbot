@@ -246,3 +246,5 @@ app.get("/api/history", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running securely on port ${PORT}`);
 });
+
+// Cloud deployment forced update
