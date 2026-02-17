@@ -196,7 +196,7 @@ app.post("/api/chat", async (req, res) => {
                   let priceInINR = priceInUSD * inrRate;
 
                   // Show the INR price, with the USD price in parentheses for context
-                  finalReply = `The current price of ${companyName} is ₹${priceInINR.toFixed(2)}).`;
+                  finalReply = `The current price of ${companyName} is ₹${priceInINR.toFixed(2)}`;
                 } else {
                   // Fallback to USD if conversion data is missing
                   finalReply = `The current price of ${companyName} is $${priceInUSD.toFixed(2)}`;
