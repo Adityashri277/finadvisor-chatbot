@@ -101,8 +101,11 @@ function ChatWindow({
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        // RESPONSIVE FIX: Prevent mobile browser scroll bounce
+        height: "100%", 
         width: "100%",
+        position: "relative",
+        overflow: "hidden", 
       }}
     >
       {/* 1. CHAT MESSAGES AREA */}
@@ -110,11 +113,12 @@ function ChatWindow({
         style={{
           flexGrow: 1,
           overflowY: "auto",
-          // RESPONSIVE PADDING: Less padding on mobile
-          padding: isMobile ? "10px" : "20px",
+          // RESPONSIVE PADDING: Extra padding on top for mobile so the sidebar button doesn't hide text
+          padding: isMobile ? "60px 10px 20px 10px" : "20px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
+          scrollBehavior: "smooth",
         }}
       >
         <div
@@ -132,7 +136,7 @@ function ChatWindow({
             style={{
               textAlign: "center",
               // RESPONSIVE MARGIN: Push it down less on mobile
-              marginTop: isMobile ? "30px" : "60px",
+              marginTop: isMobile ? "10px" : "60px",
               marginBottom: isMobile ? "20px" : "40px",
               padding: isMobile ? "0 10px" : "0",
             }}
@@ -187,14 +191,15 @@ function ChatWindow({
                 style={{
                   padding: "12px 18px",
                   // RESPONSIVE WIDTH: Let bubbles take up more screen on mobile
-                  maxWidth: isMobile ? "90%" : "80%",
+                  maxWidth: isMobile ? "92%" : "80%",
                   lineHeight: "1.6",
                   // RESPONSIVE FONT SIZE
-                  fontSize: isMobile ? "14px" : "15px",
+                  fontSize: isMobile ? "14.5px" : "15px",
                   backgroundColor: "rgba(212, 209, 209, 0.08)",
                   border: "1px solid rgba(255, 255, 255, 0.15)",
                   color: "#ECECEC",
                   borderRadius: "12px",
+                  wordWrap: "break-word", // Ensures long URLs or words don't break the layout
                 }}
               >
                 {msg.sender !== "user" && (
@@ -225,19 +230,20 @@ function ChatWindow({
               FinAdvisor is thinking...
             </div>
           )}
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} style={{ height: "1px" }} />
         </div>
       </div>
 
       {/* 2. BOTTOM CONTROL AREA */}
       <div
         style={{
-          // RESPONSIVE PADDING: Tighten up the bottom on mobile
-          padding: isMobile ? "0 10px 10px 10px" : "0 20px 20px 20px",
+          // RESPONSIVE PADDING: safe-area-inset protects against iOS/Android bottom swipe bars
+          padding: isMobile ? "0 10px max(12px, env(safe-area-inset-bottom)) 10px" : "0 20px 20px 20px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           backgroundColor: "#212121",
+          width: "100%",
         }}
       >
         <div style={{ width: "100%", maxWidth: "700px" }}>
@@ -251,6 +257,7 @@ function ChatWindow({
               paddingBottom: "5px",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
+              WebkitOverflowScrolling: "touch", // Smooth scroll on mobile
             }}
           >
             <style>{`::-webkit-scrollbar { display: none; }`}</style>
@@ -261,13 +268,13 @@ function ChatWindow({
                 onClick={() => handleSend(tab)}
                 style={{
                   whiteSpace: "nowrap",
-                  padding: isMobile ? "6px 12px" : "8px 16px",
+                  padding: isMobile ? "8px 14px" : "8px 16px",
                   borderRadius: "16px",
                   backgroundColor: "#2F2F2F",
                   color: "#ECECEC",
                   border: "1px solid #444",
                   cursor: "pointer",
-                  fontSize: isMobile ? "12px" : "13px",
+                  fontSize: isMobile ? "13px" : "13px",
                   transition: "0.2s",
                 }}
               >
@@ -285,6 +292,7 @@ function ChatWindow({
               padding: isMobile ? "6px" : "8px",
               borderRadius: "24px",
               border: "1px solid #444",
+              alignItems: "center",
             }}
           >
             <input
@@ -299,20 +307,21 @@ function ChatWindow({
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               style={{
                 flexGrow: 1,
-                padding: isMobile ? "8px 12px" : "10px 15px",
+                padding: isMobile ? "10px 12px" : "10px 15px",
                 backgroundColor: "transparent",
                 border: "none",
                 color: "#ECECEC",
                 outline: "none",
-                fontSize: isMobile ? "14px" : "15px",
-                width: "100%", // Ensures it doesn't break out of the box
+                // RESPONSIVE FIX: Font size MUST be at least 16px on mobile to prevent Chrome/Safari auto-zoom bug
+                fontSize: isMobile ? "16px" : "15px",
+                width: "100%", 
               }}
             />
             <button
               onClick={() => handleSend()}
               disabled={isTyping || !inputText.trim()}
               style={{
-                padding: isMobile ? "8px 16px" : "10px 20px",
+                padding: isMobile ? "10px 18px" : "10px 20px",
                 borderRadius: "20px",
                 backgroundColor:
                   isTyping || !inputText.trim() ? "#555" : "#ECECEC",
@@ -323,6 +332,7 @@ function ChatWindow({
                   isTyping || !inputText.trim() ? "not-allowed" : "pointer",
                 transition: "0.2s",
                 fontSize: isMobile ? "14px" : "15px",
+                flexShrink: 0, // Prevents the button from squishing on 6.1-inch screens
               }}
             >
               Send

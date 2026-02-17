@@ -48,15 +48,18 @@ const HistoryPage = ({ token }) => {
         height: "100%",
         width: "100%",
         overflowY: "auto",
-        // RESPONSIVE PADDING: Tighter on mobile
-        padding: isMobile ? "20px 10px" : "40px 20px",
+        // RESPONSIVE FIX: Prevent horizontal scroll on narrow mobile screens
+        overflowX: "hidden", 
+        boxSizing: "border-box",
+        // RESPONSIVE PADDING: Extra top padding on mobile so floating menu buttons don't cover the title
+        padding: isMobile ? "60px 10px max(20px, env(safe-area-inset-bottom)) 10px" : "40px 20px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
       }}
     >
       {/* INNER WRAPPER: Constrains the width so it doesn't stretch across the screen */}
-      <div style={{ width: "100%", maxWidth: "750px" }}>
+      <div style={{ width: "100%", maxWidth: "750px", boxSizing: "border-box" }}>
         <h2
           style={{
             paddingBottom: "20px",
@@ -137,6 +140,9 @@ const HistoryPage = ({ token }) => {
                     fontSize: isMobile ? "14px" : "16px",
                     paddingLeft: "12px",
                     borderLeft: "3px solid #007bff",
+                    // RESPONSIVE FIX: Prevent long unbroken text from stretching the box
+                    wordWrap: "break-word",
+                    overflowWrap: "break-word",
                   }}
                 >
                   {log.user_message}
@@ -170,6 +176,9 @@ const HistoryPage = ({ token }) => {
                     // RESPONSIVE FONT SIZE
                     fontSize: isMobile ? "14px" : "15px",
                     lineHeight: "1.6",
+                    // RESPONSIVE FIX: Prevent long unbroken text from stretching the box
+                    wordWrap: "break-word",
+                    overflowWrap: "break-word",
                   }}
                 >
                   {log.bot_response}

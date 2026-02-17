@@ -56,7 +56,8 @@ function App() {
 
   // If user IS logged in, show the main app!
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
+    /* RESPONSIVE FIX: Changed 100vh to 100dvh for mobile address bars, width 100vw to 100% to prevent horizontal scroll */
+    <div style={{ display: "flex", height: "100dvh", width: "100%", overflow: "hidden" }}>
       
       {/* --- NEW: MOBILE OVERLAY BACKGROUND --- */}
       {/* Clicking this dark background on mobile closes the sidebar */}
@@ -182,11 +183,13 @@ function App() {
       </div>
 
       {/* --- RIGHT MAIN CONTENT AREA --- */}
-      <main style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', width: isMobile ? '100vw' : 'auto' }}>
+      {/* RESPONSIVE FIX: Added overflow: hidden so children handle their own scrolling */}
+      <main style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', width: isMobile ? '100%' : 'auto', overflow: 'hidden' }}>
         
         {/* --- NEW: MOBILE HAMBURGER HEADER --- */}
         {isMobile && (
-          <div style={{ padding: '15px 20px', display: 'flex', alignItems: 'center', backgroundColor: '#171717', borderBottom: '1px solid #333', zIndex: 10 }}>
+          /* RESPONSIVE FIX: Added flexShrink: 0 so the header NEVER gets squished or disappears */
+          <div style={{ flexShrink: 0, padding: '15px 20px', display: 'flex', alignItems: 'center', backgroundColor: '#171717', borderBottom: '1px solid #333', zIndex: 10 }}>
             <button 
               onClick={() => setIsSidebarOpen(true)}
               style={{ background: 'none', border: 'none', color: '#ECECEC', fontSize: '24px', cursor: 'pointer', marginRight: '15px', padding: 0, display: 'flex' }}
