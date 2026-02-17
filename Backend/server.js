@@ -10,15 +10,17 @@ const jwt = require("jsonwebtoken");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// This is the master key that signs your login tokens. 
+// This is the master key that signs your login tokens.
 // In production, this goes in your .env file!
 const JWT_SECRET = process.env.JWT_SECRET || "super-secret-finadvisor-key";
 
 // Middleware
-app.use(cors({
-  origin: "*", // In the future, you can change "*" to your exact Vercel URL for ultimate security
-  methods: ["GET", "POST"]
-}));
+app.use(
+  cors({
+    origin: "*", // In the future, you can change "*" to your exact Vercel URL for ultimate security
+    methods: ["GET", "POST"],
+  }),
+);
 app.use(express.json());
 
 // Database Connection Pool
@@ -38,8 +40,10 @@ const sessionClient = new dialogflow.SessionsClient({
   credentials: {
     client_email: process.env.GOOGLE_CLIENT_EMAIL,
     // The .replace() is crucial so the cloud server reads the hidden newline characters correctly
-    private_key: process.env.GOOGLE_PRIVATE_KEY ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined
-  }
+    private_key: process.env.GOOGLE_PRIVATE_KEY
+      ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n")
+      : undefined,
+  },
 });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -52,7 +56,10 @@ app.post("/api/signup", async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
-    const [existingUsers] = await pool.execute("SELECT * FROM users WHERE email = ?", [email]);
+    const [existingUsers] = await pool.execute(
+      "SELECT * FROM users WHERE email = ?",
+      [email],
+    );
     if (existingUsers.length > 0) {
       return res.status(400).json({ error: "Email is already registered." });
     }
@@ -61,12 +68,18 @@ app.post("/api/signup", async (req, res) => {
 
     const [result] = await pool.execute(
       "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-      [name, email, hashedPassword]
+      [name, email, hashedPassword],
     );
 
-    const token = jwt.sign({ id: result.insertId, name, email }, JWT_SECRET, { expiresIn: "24h" });
+    const token = jwt.sign({ id: result.insertId, name, email }, JWT_SECRET, {
+      expiresIn: "24h",
+    });
 
-    res.json({ message: "User created successfully", token, user: { name, email } });
+    res.json({
+      message: "User created successfully",
+      token,
+      user: { name, email },
+    });
   } catch (error) {
     console.error("Signup Error:", error);
     res.status(500).json({ error: "Internal server error during signup." });
@@ -78,7 +91,9 @@ app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const [users] = await pool.execute("SELECT * FROM users WHERE email = ?", [email]);
+    const [users] = await pool.execute("SELECT * FROM users WHERE email = ?", [
+      email,
+    ]);
     if (users.length === 0) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
@@ -89,15 +104,22 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    const token = jwt.sign({ id: user.id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: "24h" });
+    const token = jwt.sign(
+      { id: user.id, name: user.name, email: user.email },
+      JWT_SECRET,
+      { expiresIn: "24h" },
+    );
 
-    res.json({ message: "Login successful", token, user: { name: user.name, email: user.email } });
+    res.json({
+      message: "Login successful",
+      token,
+      user: { name: user.name, email: user.email },
+    });
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ error: "Internal server error during login." });
   }
 });
-
 
 // ==========================================
 // 2. CHAT & AI ROUTE
@@ -112,10 +134,13 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     // 2. Define the Project ID directly
-    const projectId = process.env.GOOGLE_PROJECT_ID; 
+    const projectId = process.env.GOOGLE_PROJECT_ID;
 
     // 3. Create the session path
-    const sessionPath = sessionClient.projectAgentSessionPath(projectId, sessionId);
+    const sessionPath = sessionClient.projectAgentSessionPath(
+      projectId,
+      sessionId,
+    );
 
     const request = {
       session: sessionPath,
@@ -131,50 +156,56 @@ app.post("/api/chat", async (req, res) => {
 
     // 5. Route based on Intent (NOW SAFELY INSIDE THE ROUTE!)
     if (intentName === "GetStockPrice") {
-      const rawSymbol = result.parameters.fields.StockTicker ? result.parameters.fields.StockTicker.stringValue : null;
+      const rawSymbol = result.parameters.fields.StockTicker
+        ? result.parameters.fields.StockTicker.stringValue
+        : null;
       const searchQuery = rawSymbol ? rawSymbol.trim() : null;
 
       if (searchQuery) {
         try {
           // 1. Search Finnhub to convert the company name into a short symbol
-          const searchRes = await fetch(`https://finnhub.io/api/v1/search?q=${searchQuery}&token=${process.env.FINNHUB_API_KEY}`);
+          const searchRes = await fetch(
+            `https://finnhub.io/api/v1/search?q=${searchQuery}&token=${process.env.FINNHUB_API_KEY}`,
+          );
           const searchData = await searchRes.json();
 
           // 2. Check if Finnhub found a valid matching company
           if (searchData.count > 0 && searchData.result.length > 0) {
-            
             const bestSymbol = searchData.result[0].symbol;
-            const companyName = searchData.result[0].description || searchQuery; 
+            const companyName = searchData.result[0].description || searchQuery;
 
             // 3. Fetch the live quote using the short symbol
-            const quoteRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${bestSymbol}&token=${process.env.FINNHUB_API_KEY}`);
+            const quoteRes = await fetch(
+              `https://finnhub.io/api/v1/quote?symbol=${bestSymbol}&token=${process.env.FINNHUB_API_KEY}`,
+            );
             const quoteData = await quoteRes.json();
 
             // 4. Convert USD to INR if the quote is valid
             if (quoteData && quoteData.c && quoteData.c > 0) {
               let priceInUSD = quoteData.c;
-              
+
               try {
                 // Fetch live USD to INR exchange rate (Free public API, no key required)
-                const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
+                const fxRes = await fetch(
+                  "https://open.er-api.com/v6/latest/USD",
+                );
                 const fxData = await fxRes.json();
-                
+
                 if (fxData && fxData.rates && fxData.rates.INR) {
                   const inrRate = fxData.rates.INR;
                   let priceInINR = priceInUSD * inrRate;
-                  
+
                   // Show the INR price, with the USD price in parentheses for context
-                  finalReply = `The current price of ${companyName} (${bestSymbol}) is ₹${priceInINR.toFixed(2)} (approx. $${priceInUSD.toFixed(2)} USD).`;
+                  finalReply = `The current price of ${companyName} is ₹${priceInINR.toFixed(2)}).`;
                 } else {
                   // Fallback to USD if conversion data is missing
-                  finalReply = `The current price of ${companyName} (${bestSymbol}) is $${priceInUSD.toFixed(2)}`;
+                  finalReply = `The current price of ${companyName} is $${priceInUSD.toFixed(2)}`;
                 }
               } catch (fxError) {
                 console.error("Exchange Rate Error:", fxError.message);
                 // Fallback to USD if the exchange API fails
-                finalReply = `The current price of ${companyName} (${bestSymbol}) is $${priceInUSD.toFixed(2)}`;
+                finalReply = `The current price of ${companyName} is $${priceInUSD.toFixed(2)}`;
               }
-              
             } else {
               finalReply = `I couldn't fetch the live data for ${companyName} right now.`;
             }
@@ -186,11 +217,13 @@ app.post("/api/chat", async (req, res) => {
           finalReply = `I ran into an issue finding the data for "${searchQuery}".`;
         }
       } else {
-        finalReply = "I know you are asking for a stock price, but Dialogflow didn't catch the company name! Check the entity name in your Dialogflow console.";
+        finalReply =
+          "I know you are asking for a stock price, but Dialogflow didn't catch the company name! Check the entity name in your Dialogflow console.";
       }
-    }
-
-    else if (intentName === "Default Fallback Intent" || intentName === "ExplainTerm") {
+    } else if (
+      intentName === "Default Fallback Intent" ||
+      intentName === "ExplainTerm"
+    ) {
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const prompt = `You are an expert financial advisor named FinAdvisor AI. 
       A user has asked you this question: "${text}"
@@ -198,7 +231,7 @@ app.post("/api/chat", async (req, res) => {
       1. Keep the answer little bit concise (maximum 2 to 4 sentences).
       2. Do not use bolding, asterisks, or bullet points in your response. Just plain text.
       3. Keep the tone professional, crisp, and helpful.`;
-      
+
       const aiResult = await model.generateContent(prompt);
       finalReply = aiResult.response.text();
     }
@@ -207,14 +240,15 @@ app.post("/api/chat", async (req, res) => {
     try {
       let userId = null;
       const authHeader = req.headers.authorization;
-      
+
       if (authHeader && authHeader.startsWith("Bearer ")) {
         const token = authHeader.split(" ")[1];
         const decoded = jwt.verify(token, JWT_SECRET);
         userId = decoded.id; // Extract the specific user ID from the secure token
       }
 
-      const insertQuery = "INSERT INTO chat_history (session_id, user_message, bot_response, user_id) VALUES (?, ?, ?, ?)";
+      const insertQuery =
+        "INSERT INTO chat_history (session_id, user_message, bot_response, user_id) VALUES (?, ?, ?, ?)";
       await pool.execute(insertQuery, [sessionId, text, finalReply, userId]);
     } catch (dbError) {
       console.error("Database Save Error:", dbError.message);
@@ -222,13 +256,13 @@ app.post("/api/chat", async (req, res) => {
 
     // 7. Send the successful reply back to your React frontend
     return res.json({ reply: finalReply, intent: intentName });
-
   } catch (error) {
     console.error("Chat API Error:", error);
-    return res.status(500).json({ error: "System error: Cannot reach the backend server." });
+    return res
+      .status(500)
+      .json({ error: "System error: Cannot reach the backend server." });
   }
 });
-
 
 // ==========================================
 // 3. SECURE HISTORY ROUTE
@@ -246,15 +280,16 @@ app.get("/api/history", async (req, res) => {
     const userId = decoded.id;
 
     // 2. Fetch ONLY the chats belonging to this specific user ID
-    const [rows] = await pool.execute("SELECT * FROM chat_history WHERE user_id = ? ORDER BY timestamp ASC", [userId]);
+    const [rows] = await pool.execute(
+      "SELECT * FROM chat_history WHERE user_id = ? ORDER BY timestamp ASC",
+      [userId],
+    );
     res.json(rows);
-
   } catch (error) {
     console.error("Database Fetch Error:", error.message);
     res.status(500).json({ error: "Failed to retrieve chat history." });
   }
 });
-
 
 // Start the Server
 app.listen(PORT, () => {
