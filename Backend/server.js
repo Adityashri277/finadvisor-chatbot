@@ -3,8 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const mysql = require("mysql2/promise");
 const dialogflow = require("@google-cloud/dialogflow");
-const YahooFinance = require("yahoo-finance2").default;
-const yahooFinance = new YahooFinance();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -138,30 +136,45 @@ app.post("/api/chat", async (req, res) => {
 
       if (searchQuery) {
         try {
-          const searchResults = await yahooFinance.search(searchQuery);
-          const validQuote = searchResults.quotes ? searchResults.quotes.find((q) => q.isYahooFinance === true && q.symbol) : null;
+          // 1. Search Finnhub to convert the company name into a short symbol
+          const searchRes = await fetch(`https://finnhub.io/api/v1/search?q=${searchQuery}&token=${process.env.FINNHUB_API_KEY}`);
+          const searchData = await searchRes.json();
 
-          if (validQuote) {
-            const bestSymbol = validQuote.symbol;
-            const companyName = validQuote.shortname || validQuote.longname || searchQuery;
-            const quote = await yahooFinance.quote(bestSymbol);
+          // 2. Check if Finnhub found a valid matching company
+          if (searchData.count > 0 && searchData.result.length > 0) {
+            
+            const bestSymbol = searchData.result[0].symbol;
+            const companyName = searchData.result[0].description || searchQuery; 
 
-            if (quote && quote.regularMarketPrice) {
-              let price = quote.regularMarketPrice;
-              let currency = quote.currency || "USD";
+            // 3. Fetch the live quote using the short symbol
+            const quoteRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${bestSymbol}&token=${process.env.FINNHUB_API_KEY}`);
+            const quoteData = await quoteRes.json();
 
-              if (currency === "USD") {
-                try {
-                  const inrQuote = await yahooFinance.quote("INR=X");
-                  price = price * inrQuote.regularMarketPrice;
-                  currency = "INR";
-                } catch (conversionError) {
-                  console.error("Conversion Error:", conversionError.message);
+            // 4. Convert USD to INR if the quote is valid
+            if (quoteData && quoteData.c && quoteData.c > 0) {
+              let priceInUSD = quoteData.c;
+              
+              try {
+                // Fetch live USD to INR exchange rate (Free public API, no key required)
+                const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
+                const fxData = await fxRes.json();
+                
+                if (fxData && fxData.rates && fxData.rates.INR) {
+                  const inrRate = fxData.rates.INR;
+                  let priceInINR = priceInUSD * inrRate;
+                  
+                  // Show the INR price, with the USD price in parentheses for context
+                  finalReply = `The current price of ${companyName} (${bestSymbol}) is ₹${priceInINR.toFixed(2)} (approx. $${priceInUSD.toFixed(2)} USD).`;
+                } else {
+                  // Fallback to USD if conversion data is missing
+                  finalReply = `The current price of ${companyName} (${bestSymbol}) is $${priceInUSD.toFixed(2)}`;
                 }
+              } catch (fxError) {
+                console.error("Exchange Rate Error:", fxError.message);
+                // Fallback to USD if the exchange API fails
+                finalReply = `The current price of ${companyName} (${bestSymbol}) is $${priceInUSD.toFixed(2)}`;
               }
-
-              const currencySymbol = currency === "INR" ? "₹" : currency === "USD" ? "$" : currency + " ";
-              finalReply = `The current price of ${companyName} is ${currencySymbol}${price.toFixed(2)}`;
+              
             } else {
               finalReply = `I couldn't fetch the live data for ${companyName} right now.`;
             }
@@ -169,21 +182,22 @@ app.post("/api/chat", async (req, res) => {
             finalReply = `I couldn't find a tradable public stock matching "${searchQuery}". They might be a private company or unlisted!`;
           }
         } catch (apiError) {
-          console.error("Yahoo Finance Error:", apiError.message);
+          console.error("Finnhub API Error:", apiError.message);
           finalReply = `I ran into an issue finding the data for "${searchQuery}".`;
         }
       } else {
         finalReply = "I know you are asking for a stock price, but Dialogflow didn't catch the company name! Check the entity name in your Dialogflow console.";
       }
-    } else if (intentName === "Default Fallback Intent" || intentName === "ExplainTerm") {
+    }
+
+    else if (intentName === "Default Fallback Intent" || intentName === "ExplainTerm") {
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const prompt = `You are an expert financial advisor named FinAdvisor AI. 
       A user has asked you this question: "${text}"
       Strict Rules for your response:
       1. Keep the answer little bit concise (maximum 2 to 4 sentences).
-      2. Explain things simply, as if speaking to a beginner investor.
-      3. Do not use bolding, asterisks, or bullet points in your response. Just plain text.
-      4. Keep the tone professional, crisp, and helpful.`;
+      2. Do not use bolding, asterisks, or bullet points in your response. Just plain text.
+      3. Keep the tone professional, crisp, and helpful.`;
       
       const aiResult = await model.generateContent(prompt);
       finalReply = aiResult.response.text();
