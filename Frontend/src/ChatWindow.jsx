@@ -101,8 +101,7 @@ function ChatWindow({
       style={{
         display: "flex",
         flexDirection: "column",
-        // RESPONSIVE FIX: Prevent mobile browser scroll bounce
-        height: "100%", 
+        flex: 1, /* FIX: Changed height: 100% to flex: 1 so it fits perfectly under the header */
         width: "100%",
         position: "relative",
         overflow: "hidden", 
@@ -113,8 +112,8 @@ function ChatWindow({
         style={{
           flexGrow: 1,
           overflowY: "auto",
-          // RESPONSIVE PADDING: Extra padding on top for mobile so the sidebar button doesn't hide text
-          padding: isMobile ? "60px 10px 20px 10px" : "20px",
+          /* FIX: Removed the 60px top padding since the header is now neatly stacked above it */
+          padding: isMobile ? "10px 10px 20px 10px" : "20px", 
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
