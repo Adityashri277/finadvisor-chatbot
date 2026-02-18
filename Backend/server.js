@@ -156,9 +156,11 @@ app.post("/api/chat", async (req, res) => {
 
     // 5. Route based on Intent (NOW SAFELY INSIDE THE ROUTE!)
     if (intentName === "GetStockPrice") {
-      const rawSymbol = result.parameters.fields.StockTicker
-        ? result.parameters.fields.StockTicker.stringValue
-        : null;
+      const rawSymbol =
+        result.parameters.StockTicker ||
+        (result.parameters.fields && result.parameters.fields.StockTicker
+          ? result.parameters.fields.StockTicker.stringValue
+          : null);
       const searchQuery = rawSymbol ? rawSymbol.trim() : null;
 
       if (searchQuery) {
