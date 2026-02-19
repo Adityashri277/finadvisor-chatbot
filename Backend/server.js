@@ -19,7 +19,7 @@ app.use(
   cors({
     origin: "*", // In the future, you can change "*" to your exact Vercel URL for ultimate security
     methods: ["GET", "POST"],
-  }),
+  })
 );
 app.use(express.json());
 
@@ -58,7 +58,7 @@ app.post("/api/signup", async (req, res) => {
   try {
     const [existingUsers] = await pool.execute(
       "SELECT * FROM users WHERE email = ?",
-      [email],
+      [email]
     );
     if (existingUsers.length > 0) {
       return res.status(400).json({ error: "Email is already registered." });
@@ -68,7 +68,7 @@ app.post("/api/signup", async (req, res) => {
 
     const [result] = await pool.execute(
       "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-      [name, email, hashedPassword],
+      [name, email, hashedPassword]
     );
 
     const token = jwt.sign({ id: result.insertId, name, email }, JWT_SECRET, {
@@ -107,7 +107,7 @@ app.post("/api/login", async (req, res) => {
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email },
       JWT_SECRET,
-      { expiresIn: "24h" },
+      { expiresIn: "24h" }
     );
 
     res.json({
@@ -139,7 +139,7 @@ app.post("/api/chat", async (req, res) => {
     // 3. Create the session path
     const sessionPath = sessionClient.projectAgentSessionPath(
       projectId,
-      sessionId,
+      sessionId
     );
 
     const request = {
@@ -154,59 +154,47 @@ app.post("/api/chat", async (req, res) => {
 
     let finalReply = result.fulfillmentText;
 
-    // 5. Route based on Intent (NOW SAFELY INSIDE THE ROUTE!)
+    // --- FORMATTING HELPERS ---
+    const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
+    const formatUSD = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+    const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
+
+    // 5. Route based on Intent (Now perfectly chained)
+    // --- 1. STOCK PRICE HANDLER ---
     if (intentName === "GetStockPrice") {
-      const rawSymbol =
-        result.parameters.StockTicker ||
-        (result.parameters.fields && result.parameters.fields.StockTicker
-          ? result.parameters.fields.StockTicker.stringValue
-          : null);
+      let rawSymbol = result.parameters.StockTicker || (result.parameters.fields && result.parameters.fields.StockTicker ? result.parameters.fields.StockTicker.stringValue : null);
+      if (Array.isArray(rawSymbol)) rawSymbol = rawSymbol[0];
       const searchQuery = rawSymbol ? rawSymbol.trim() : null;
 
       if (searchQuery) {
         try {
-          // 1. Search Finnhub to convert the company name into a short symbol
-          const searchRes = await fetch(
-            `https://finnhub.io/api/v1/search?q=${searchQuery}&token=${process.env.FINNHUB_API_KEY}`,
-          );
+          const searchRes = await fetch(`https://finnhub.io/api/v1/search?q=${searchQuery}&token=${process.env.FINNHUB_API_KEY}`);
           const searchData = await searchRes.json();
 
-          // 2. Check if Finnhub found a valid matching company
           if (searchData.count > 0 && searchData.result.length > 0) {
             const bestSymbol = searchData.result[0].symbol;
-            const companyName = searchData.result[0].description || searchQuery;
+            const companyName = searchData.result[0].description || capitalize(searchQuery);
 
-            // 3. Fetch the live quote using the short symbol
-            const quoteRes = await fetch(
-              `https://finnhub.io/api/v1/quote?symbol=${bestSymbol}&token=${process.env.FINNHUB_API_KEY}`,
-            );
+            const quoteRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${bestSymbol}&token=${process.env.FINNHUB_API_KEY}`);
             const quoteData = await quoteRes.json();
 
-            // 4. Convert USD to INR if the quote is valid
             if (quoteData && quoteData.c && quoteData.c > 0) {
               let priceInUSD = quoteData.c;
 
               try {
-                // Fetch live USD to INR exchange rate (Free public API, no key required)
-                const fxRes = await fetch(
-                  "https://open.er-api.com/v6/latest/USD",
-                );
+                const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
                 const fxData = await fxRes.json();
 
                 if (fxData && fxData.rates && fxData.rates.INR) {
                   const inrRate = fxData.rates.INR;
                   let priceInINR = priceInUSD * inrRate;
-
-                  // Show the INR price, with the USD price in parentheses for context
-                  finalReply = `The current price of ${companyName} is ₹${priceInINR.toFixed(2)}`;
+                  finalReply = `The current price of ${companyName} is ${formatINR(priceInINR)}`;
                 } else {
-                  // Fallback to USD if conversion data is missing
-                  finalReply = `The current price of ${companyName} is $${priceInUSD.toFixed(2)}`;
+                  finalReply = `The current price of ${companyName} is ${formatUSD(priceInUSD)}.`;
                 }
               } catch (fxError) {
                 console.error("Exchange Rate Error:", fxError.message);
-                // Fallback to USD if the exchange API fails
-                finalReply = `The current price of ${companyName} is $${priceInUSD.toFixed(2)}`;
+                finalReply = `The current price of ${companyName} is ${formatUSD(priceInUSD)}.`;
               }
             } else {
               finalReply = `I couldn't fetch the live data for ${companyName} right now.`;
@@ -219,23 +207,122 @@ app.post("/api/chat", async (req, res) => {
           finalReply = `I ran into an issue finding the data for "${searchQuery}".`;
         }
       } else {
-        finalReply =
-          "I know you are asking for a stock price, but Dialogflow didn't catch the company name! Check the entity name in your Dialogflow console.";
+        finalReply = "I know you are asking for a stock price, but Dialogflow didn't catch the company name! Check the entity name in your Dialogflow console.";
       }
-    } else if (
-      intentName === "Default Fallback Intent" ||
-      intentName === "ExplainTerm"
-    ) {
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      const prompt = `You are an expert financial advisor named FinAdvisor AI. 
-      A user has asked you this question: "${text}"
-      Strict Rules for your response:
-      1. Keep the answer little bit concise (maximum 2 to 4 sentences).
-      2. Do not use bolding, asterisks, or bullet points in your response. Just plain text.
-      3. Keep the tone professional, crisp, and helpful.`;
+    } 
+    // --- 2. CRYPTO HANDLER ---
+    else if (intentName === "GetCryptoPrice") {
+      let rawCoin = result.parameters.fields?.CryptoName?.stringValue || result.parameters.CryptoName;
+      if (Array.isArray(rawCoin)) rawCoin = rawCoin[0];
+      const coinName = rawCoin ? rawCoin.toLowerCase().trim() : null;
 
-      const aiResult = await model.generateContent(prompt);
-      finalReply = aiResult.response.text();
+      const cryptoMap = {
+        "bitcoin": "BINANCE:BTCUSDT", "btc": "BINANCE:BTCUSDT",
+        "ethereum": "BINANCE:ETHUSDT", "eth": "BINANCE:ETHUSDT",
+        "dogecoin": "BINANCE:DOGEUSDT", "doge": "BINANCE:DOGEUSDT",
+        "solana": "BINANCE:SOLUSDT", "sol": "BINANCE:SOLUSDT",
+        "ripple": "BINANCE:XRPUSDT", "xrp": "BINANCE:XRPUSDT",
+        "cardano": "BINANCE:ADAUSDT", "ada": "BINANCE:ADAUSDT"
+      };
+
+      const symbol = cryptoMap[coinName];
+
+      if (symbol) {
+        try {
+          const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${process.env.FINNHUB_API_KEY}`);
+          const data = await res.json();
+          
+          if (data.c) {
+            const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
+            const fxData = await fxRes.json();
+            const inrRate = fxData.rates.INR;
+            const priceInINR = data.c * inrRate;
+
+            finalReply = `The current price of ${capitalize(coinName)} is ${formatINR(priceInINR)}`;
+          } else {
+            finalReply = `I couldn't fetch the live crypto data for ${coinName} right now.`;
+          }
+        } catch (error) {
+          console.error("Crypto API Error:", error);
+          finalReply = "I ran into a digital glitch fetching that crypto price.";
+        }
+      } else {
+        finalReply = "I currently only track major cryptos like Bitcoin, Ethereum, Doge, Solana, and Ripple. Try one of those!";
+      }
+    } 
+    // --- 3. FOREX HANDLER ---
+  
+    else if (intentName === "GetForexRate") {
+      let rawCurrency = result.parameters.fields?.ForexName?.stringValue || result.parameters.ForexName;
+      if (Array.isArray(rawCurrency)) rawCurrency = rawCurrency[0]; // Safety catch
+      const currency = rawCurrency ? rawCurrency.toLowerCase().trim() : null;
+
+      
+      // "Magic Map" - Map spoken words to their 3-letter ISO currency codes
+      const currencyMap = {
+        // 1. US Dollar
+        "us dollar": "USD", "dollar": "USD", "usd": "USD", "american dollar": "USD",
+        // 2. Euro
+        "euro": "EUR", "eur": "EUR", "euros": "EUR",
+        // 3. British Pound
+        "british pound": "GBP", "pound": "GBP", "gbp": "GBP", "sterling": "GBP",
+        // 4. Japanese Yen
+        "japanese yen": "JPY", "yen": "JPY", "jpy": "JPY",
+        // 5. UAE Dirham
+        "uae dirham": "AED", "dirham": "AED", "aed": "AED",
+        // 6. Australian Dollar
+        "australian dollar": "AUD", "aud": "AUD", "aussie dollar": "AUD",
+        // 7. Canadian Dollar
+        "canadian dollar": "CAD", "cad": "CAD",
+        // 8. Swiss Franc
+        "swiss franc": "CHF", "franc": "CHF", "chf": "CHF",
+        // 9. Singapore Dollar
+        "singapore dollar": "SGD", "sgd": "SGD",
+        // 10. Chinese Yuan
+        "chinese yuan": "CNY", "yuan": "CNY", "cny": "CNY", "renminbi": "CNY", "rmb": "CNY",
+        // 11. New Zealand Dollar
+        "new zealand dollar": "NZD", "nzd": "NZD", "kiwi": "NZD",
+        // 12. South African Rand
+        "south african rand": "ZAR", "rand": "ZAR", "zar": "ZAR",
+        // 13. Saudi Riyal
+        "saudi riyal": "SAR", "riyal": "SAR", "sar": "SAR",
+        // 14. Kuwaiti Dinar
+        "kuwaiti dinar": "KWD", "dinar": "KWD", "kwd": "KWD",
+        // 15. Omani Rial
+        "omani rial": "OMR", "rial": "OMR", "omr": "OMR"
+      };
+      const targetCode = currencyMap[currency];
+
+      if (currency === "rupee" || currency === "inr" || currency === "indian rupee") {
+        finalReply = "The Indian Rupee (INR) is our base currency! 1 INR is always equal to 1 INR. Try asking for the price of the US Dollar or Euro.";
+      } 
+      else if (targetCode) {
+        try {
+          // Fetch rates using the requested currency as the BASE
+          const res = await fetch(`https://open.er-api.com/v6/latest/${targetCode}`);
+          const data = await res.json();
+          
+          if (data && data.rates && data.rates.INR) {
+            const rateInRupees = data.rates.INR;
+            
+            // Format nicely with the Rupee symbol and commas
+            const formattedRate = new Intl.NumberFormat('en-IN', { 
+              style: 'currency', 
+              currency: 'INR',
+              maximumFractionDigits: 2 
+            }).format(rateInRupees);
+            
+            finalReply = `1 ${targetCode} is currently trading at ${formattedRate}`;
+          } else {
+            finalReply = `I couldn't fetch the INR conversion rate for ${currency}`;
+          }
+        } catch (error) {
+          console.error("Forex API Error:", error);
+          finalReply = "I couldn't connect to the currency exchange right now.";
+        }
+      } else {
+        finalReply = "I track major currencies against the Rupee (like USD, Euro, GBP, Yen, and Dirham). Which one do you want to convert to INR?";
+      }
     }
 
     // 6. SECURELY Save the conversation to MySQL
@@ -248,7 +335,7 @@ app.post("/api/chat", async (req, res) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         userId = decoded.id; // Extract the specific user ID from the secure token
       }
-
+    
       const insertQuery =
         "INSERT INTO chat_history (session_id, user_message, bot_response, user_id) VALUES (?, ?, ?, ?)";
       await pool.execute(insertQuery, [sessionId, text, finalReply, userId]);
@@ -284,7 +371,7 @@ app.get("/api/history", async (req, res) => {
     // 2. Fetch ONLY the chats belonging to this specific user ID
     const [rows] = await pool.execute(
       "SELECT * FROM chat_history WHERE user_id = ? ORDER BY timestamp ASC",
-      [userId],
+      [userId]
     );
     res.json(rows);
   } catch (error) {
@@ -297,5 +384,3 @@ app.get("/api/history", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running securely on port ${PORT}`);
 });
-
-// Cloud deployment forced update

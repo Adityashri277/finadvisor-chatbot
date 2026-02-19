@@ -23,13 +23,14 @@ function ChatWindow({
   }, []);
 
   const suggestions = [
-    "Stock price of Apple?",
-    "Explain 'Bull Market'",
-    "What are mutual funds?",
-    "What is a Demat account?",
-    "Live price of Reliance",
-    "What is SIP?",
+    "Convert Dirham to INR",
+    "Live Price of Nvidia",
     "Explain Nifty 50",
+    "Stock price of Mircrosoft?",
+    "Yen exchange rate",
+    "Live price of Bitcoin",
+    "Euro exchange rate",
+    "Explain 'Bull Market'"
   ];
 
   // Auto-scroll to bottom when new messages arrive
@@ -53,7 +54,7 @@ function ChatWindow({
     try {
       // 1. Safely grab the environment variable, or fallback to localhost
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-      
+
       // DEBUG: This will print the URL to your browser console so we can verify it
       console.log("FinAdvisor is attempting to connect to:", API_URL);
 
@@ -62,7 +63,7 @@ function ChatWindow({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`, 
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ text: textToSend }),
       });
@@ -93,7 +94,6 @@ function ChatWindow({
     } finally {
       setIsTyping(false);
     }
-    
   };
 
   return (
@@ -101,10 +101,10 @@ function ChatWindow({
       style={{
         display: "flex",
         flexDirection: "column",
-        flex: 1, /* FIX: Changed height: 100% to flex: 1 so it fits perfectly under the header */
+        flex: 1 /* FIX: Changed height: 100% to flex: 1 so it fits perfectly under the header */,
         width: "100%",
         position: "relative",
-        overflow: "hidden", 
+        overflow: "hidden",
       }}
     >
       {/* 1. CHAT MESSAGES AREA */}
@@ -113,7 +113,7 @@ function ChatWindow({
           flexGrow: 1,
           overflowY: "auto",
           /* FIX: Removed the 60px top padding since the header is now neatly stacked above it */
-          padding: isMobile ? "10px 10px 20px 10px" : "20px", 
+          padding: isMobile ? "10px 10px 20px 10px" : "20px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -237,7 +237,9 @@ function ChatWindow({
       <div
         style={{
           // RESPONSIVE PADDING: safe-area-inset protects against iOS/Android bottom swipe bars
-          padding: isMobile ? "0 10px max(12px, env(safe-area-inset-bottom)) 10px" : "0 20px 20px 20px",
+          padding: isMobile
+            ? "0 10px max(12px, env(safe-area-inset-bottom)) 10px"
+            : "0 20px 20px 20px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -313,7 +315,7 @@ function ChatWindow({
                 outline: "none",
                 // RESPONSIVE FIX: Font size MUST be at least 16px on mobile to prevent Chrome/Safari auto-zoom bug
                 fontSize: isMobile ? "16px" : "15px",
-                width: "100%", 
+                width: "100%",
               }}
             />
             <button
