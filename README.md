@@ -80,9 +80,25 @@ A full-stack, AI-powered financial advisor and stock market assistant. FinAdviso
 
 ## 🚀 Getting Started (Running Locally)
 
-If you want to run this project on your local machine, you will need a few free API keys.
+If you want to run this project on your local machine, you will need a few API keys.
 
 ### 1. Clone the repository
 ```bash
 git clone [https://github.com/Adityashri277/finadvisor-chatbot.git](https://github.com/Adityashri277/finadvisor-chatbot.git)
 cd finadvisor-chatbot
+```
+### 2. Install backend dependencies
+```bash
+cd backend && npm install
+```
+### 3. Install frontend dependencies
+```bash
+cd ../frontend && npm install
+```
+### 4. Run the application
+```bash
+# Start Backend
+node server.js
+# Start Frontend
+npm start
+```
