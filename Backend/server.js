@@ -124,6 +124,9 @@ app.post("/api/login", async (req, res) => {
 // ==========================================
 // 2. CHAT & AI ROUTE
 // ==========================================
+// ==========================================
+// 2. CHAT & AI ROUTE
+// ==========================================
 app.post("/api/chat", async (req, res) => {
   const { text, sessionId = "finadvisor-session-123" } = req.body;
 
@@ -251,44 +254,27 @@ app.post("/api/chat", async (req, res) => {
       }
     } 
     // --- 3. FOREX HANDLER ---
-  
     else if (intentName === "GetForexRate") {
       let rawCurrency = result.parameters.fields?.ForexName?.stringValue || result.parameters.ForexName;
       if (Array.isArray(rawCurrency)) rawCurrency = rawCurrency[0]; // Safety catch
       const currency = rawCurrency ? rawCurrency.toLowerCase().trim() : null;
-
       
       // "Magic Map" - Map spoken words to their 3-letter ISO currency codes
       const currencyMap = {
-        // 1. US Dollar
         "us dollar": "USD", "dollar": "USD", "usd": "USD", "american dollar": "USD",
-        // 2. Euro
         "euro": "EUR", "eur": "EUR", "euros": "EUR",
-        // 3. British Pound
         "british pound": "GBP", "pound": "GBP", "gbp": "GBP", "sterling": "GBP",
-        // 4. Japanese Yen
         "japanese yen": "JPY", "yen": "JPY", "jpy": "JPY",
-        // 5. UAE Dirham
         "uae dirham": "AED", "dirham": "AED", "aed": "AED",
-        // 6. Australian Dollar
         "australian dollar": "AUD", "aud": "AUD", "aussie dollar": "AUD",
-        // 7. Canadian Dollar
         "canadian dollar": "CAD", "cad": "CAD",
-        // 8. Swiss Franc
         "swiss franc": "CHF", "franc": "CHF", "chf": "CHF",
-        // 9. Singapore Dollar
         "singapore dollar": "SGD", "sgd": "SGD",
-        // 10. Chinese Yuan
         "chinese yuan": "CNY", "yuan": "CNY", "cny": "CNY", "renminbi": "CNY", "rmb": "CNY",
-        // 11. New Zealand Dollar
         "new zealand dollar": "NZD", "nzd": "NZD", "kiwi": "NZD",
-        // 12. South African Rand
         "south african rand": "ZAR", "rand": "ZAR", "zar": "ZAR",
-        // 13. Saudi Riyal
         "saudi riyal": "SAR", "riyal": "SAR", "sar": "SAR",
-        // 14. Kuwaiti Dinar
         "kuwaiti dinar": "KWD", "dinar": "KWD", "kwd": "KWD",
-        // 15. Omani Rial
         "omani rial": "OMR", "rial": "OMR", "omr": "OMR"
       };
       const targetCode = currencyMap[currency];
@@ -320,9 +306,18 @@ app.post("/api/chat", async (req, res) => {
           console.error("Forex API Error:", error);
           finalReply = "I couldn't connect to the currency exchange right now.";
         }
-      } else {
+      } 
+      else {
         finalReply = "I track major currencies against the Rupee (like USD, Euro, GBP, Yen, and Dirham). Which one do you want to convert to INR?";
       }
+    } // <-- FIX: Properly closed the GetForexRate block here!
+
+    // --- 4. GEMINI AI FALLBACK & EXPLAIN TERM ---
+    else if (intentName === "Default Fallback Intent" || intentName === "ExplainTerm") {
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const prompt = `You are an Finacial Exprert. Explain this clearly in 2-4 sentences: "${text}". No bolding or lists.`;
+      const aiResult = await model.generateContent(prompt);
+      finalReply = aiResult.response.text();
     }
 
     // 6. SECURELY Save the conversation to MySQL
@@ -345,6 +340,7 @@ app.post("/api/chat", async (req, res) => {
 
     // 7. Send the successful reply back to your React frontend
     return res.json({ reply: finalReply, intent: intentName });
+
   } catch (error) {
     console.error("Chat API Error:", error);
     return res
