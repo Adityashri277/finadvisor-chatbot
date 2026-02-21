@@ -21,13 +21,28 @@ A full-stack, AI-powered financial advisor and stock market assistant. FinAdviso
 
 ## ✨ Key Features
 
-* **🤖 Dual-Brain AI System** * Uses **Google Dialogflow** for precise intent recognition (detecting specific stock/price queries).
-  * Uses **Google Gemini 2.5 Flash** for generating conversational, easy-to-understand financial advice and definitions.
-* **📊 Live Stock Market Data** * Integrates with the official **Finnhub API** to convert standard company names (e.g., "Apple") into valid ticker symbols ("AAPL") and fetch real-time market prices.
-* **💱 Dynamic Currency Conversion** * Automatically fetches live global exchange rates via **ExchangeRate-API** to display US stock prices in both locally localized INR (₹) and USD ($).
-* **🔒 Secure Authentication** * Features a custom JWT (JSON Web Token) login and signup system with securely hashed passwords using `bcrypt`.
-* **💾 Persistent Memory** * Automatically saves user chat sessions to a remote MySQL database, viewable in a custom "History" slide-out sidebar.
-* **📱 Flawless Mobile Responsiveness** * Custom UI engineered with `100dvh` calculations to prevent mobile browser address bars from breaking the layout, complete with an off-canvas mobile navigation menu.
+* **🤖 Intelligent Intent Recognition**
+  * Powered by **Google Dialogflow** for high-precision NLP, accurately detecting specific financial intents (Stocks, Crypto, or Forex) even within ambiguous conversational queries.
+
+* **📈 Integrated Stock & Crypto Tracking**
+  * Real-time integration with **Finnhub** and **Binance** data streams.
+  * Dynamically converts company names (e.g., "Tesla") into tickers ("TSLA") and fetches live valuations for top cryptocurrencies like Bitcoin, Ethereum, and Solana.
+
+* **💱 Enhanced Forex-to-INR Engine**
+  * Custom-built conversion layer supporting **15+ major global currencies** (USD, EUR, GBP, AED, JPY, etc.).
+  * Uses the **ExchangeRate-API** to provide direct, real-time conversion into Indian Rupees (INR) by default.
+
+* **🇮🇳 Localized Financial Formatting**
+  * Engineered with the **Indian Numbering System** to ensure high readability for large figures (e.g., displaying **₹60,92,636.28** instead of standard western formatting).
+
+* **🔒 Secure Authentication**
+  * Features a robust **JWT (JSON Web Token)** login and signup system with industrial-grade password hashing using `bcrypt`.
+
+* **💾 Persistent Chat Memory**
+  * Every interaction is automatically saved to a **MySQL database** with user-specific indexing, allowing for a seamless "Chat History" experience via the slide-out sidebar.
+
+* **📱 Mobile-First UI Architecture**
+  * Advanced CSS implementation using `100dvh` and dynamic viewport calculations to prevent mobile browser UI elements (like address bars) from breaking the layout.
 
 ---
 
