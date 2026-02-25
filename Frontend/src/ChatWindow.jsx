@@ -15,6 +15,7 @@ function ChatWindow({
 
   // --- NEW: RESPONSIVE STATE ---
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+ 
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -26,11 +27,9 @@ function ChatWindow({
     "Convert Dirham to INR",
     "Live Price of Nvidia",
     "Explain Nifty 50",
-    "Stock price of Mircrosoft?",
+    "Stock price of Microsoft?",
     "Yen exchange rate",
     "Live price of Bitcoin",
-    "Euro exchange rate",
-    "Explain 'Bull Market'"
   ];
 
   // Auto-scroll to bottom when new messages arrive
@@ -107,6 +106,7 @@ function ChatWindow({
         overflow: "hidden",
       }}
     >
+      
       {/* 1. CHAT MESSAGES AREA */}
       <div
         style={{
@@ -212,7 +212,13 @@ function ChatWindow({
                     FinAdvisor
                   </strong>
                 )}
-                {msg.text}
+                {/* THE FIX: Splitting the text by newlines and adding HTML break tags */}
+                {msg.text.split("\n").map((line, lineIndex) => (
+                  <span key={lineIndex}>
+                    {line}
+                    <br />
+                  </span>
+                ))}
               </div>
             </div>
           ))}

@@ -19,7 +19,7 @@ app.use(
   cors({
     origin: "*", // In the future, you can change "*" to your exact Vercel URL for ultimate security
     methods: ["GET", "POST"],
-  })
+  }),
 );
 app.use(express.json());
 
@@ -58,7 +58,7 @@ app.post("/api/signup", async (req, res) => {
   try {
     const [existingUsers] = await pool.execute(
       "SELECT * FROM users WHERE email = ?",
-      [email]
+      [email],
     );
     if (existingUsers.length > 0) {
       return res.status(400).json({ error: "Email is already registered." });
@@ -68,7 +68,7 @@ app.post("/api/signup", async (req, res) => {
 
     const [result] = await pool.execute(
       "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-      [name, email, hashedPassword]
+      [name, email, hashedPassword],
     );
 
     const token = jwt.sign({ id: result.insertId, name, email }, JWT_SECRET, {
@@ -107,7 +107,7 @@ app.post("/api/login", async (req, res) => {
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email },
       JWT_SECRET,
-      { expiresIn: "24h" }
+      { expiresIn: "24h" },
     );
 
     res.json({
@@ -142,7 +142,7 @@ app.post("/api/chat", async (req, res) => {
     // 3. Create the session path
     const sessionPath = sessionClient.projectAgentSessionPath(
       projectId,
-      sessionId
+      sessionId,
     );
 
     const request = {
@@ -158,34 +158,68 @@ app.post("/api/chat", async (req, res) => {
     let finalReply = result.fulfillmentText;
 
     // --- FORMATTING HELPERS ---
-    const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
-    const formatUSD = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-    const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
 
+    const formatINR = (amount) => {
+      // If the number is 1 Crore or more
+      if (amount >= 10000000) {
+        return "₹" + (amount / 10000000).toFixed(2) + " Cr";
+      }
+      // If the number is 1 Lakh or more (but less than 1 Cr)
+      else if (amount >= 100000) {
+        return "₹" + (amount / 100000).toFixed(2) + " L";
+      }
+      // If it's a smaller number, format normally with commas
+      else {
+        return new Intl.NumberFormat("en-IN", {
+          style: "currency",
+          currency: "INR",
+          maximumFractionDigits: 0, // Removes the .00 for cleaner look
+        }).format(amount);
+      }
+    };
+
+    const formatUSD = (amount) =>
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(amount);
+    const capitalize = (str) =>
+      str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "";
     // 5. Route based on Intent (Now perfectly chained)
     // --- 1. STOCK PRICE HANDLER ---
     if (intentName === "GetStockPrice") {
-      let rawSymbol = result.parameters.StockTicker || (result.parameters.fields && result.parameters.fields.StockTicker ? result.parameters.fields.StockTicker.stringValue : null);
+      let rawSymbol =
+        result.parameters.StockTicker ||
+        (result.parameters.fields && result.parameters.fields.StockTicker
+          ? result.parameters.fields.StockTicker.stringValue
+          : null);
       if (Array.isArray(rawSymbol)) rawSymbol = rawSymbol[0];
       const searchQuery = rawSymbol ? rawSymbol.trim() : null;
 
       if (searchQuery) {
         try {
-          const searchRes = await fetch(`https://finnhub.io/api/v1/search?q=${searchQuery}&token=${process.env.FINNHUB_API_KEY}`);
+          const searchRes = await fetch(
+            `https://finnhub.io/api/v1/search?q=${searchQuery}&token=${process.env.FINNHUB_API_KEY}`,
+          );
           const searchData = await searchRes.json();
 
           if (searchData.count > 0 && searchData.result.length > 0) {
             const bestSymbol = searchData.result[0].symbol;
-            const companyName = searchData.result[0].description || capitalize(searchQuery);
+            const companyName =
+              searchData.result[0].description || capitalize(searchQuery);
 
-            const quoteRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${bestSymbol}&token=${process.env.FINNHUB_API_KEY}`);
+            const quoteRes = await fetch(
+              `https://finnhub.io/api/v1/quote?symbol=${bestSymbol}&token=${process.env.FINNHUB_API_KEY}`,
+            );
             const quoteData = await quoteRes.json();
 
             if (quoteData && quoteData.c && quoteData.c > 0) {
               let priceInUSD = quoteData.c;
 
               try {
-                const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
+                const fxRes = await fetch(
+                  "https://open.er-api.com/v6/latest/USD",
+                );
                 const fxData = await fxRes.json();
 
                 if (fxData && fxData.rates && fxData.rates.INR) {
@@ -210,31 +244,42 @@ app.post("/api/chat", async (req, res) => {
           finalReply = `I ran into an issue finding the data for "${searchQuery}".`;
         }
       } else {
-        finalReply = "I know you are asking for a stock price, but Dialogflow didn't catch the company name! Check the entity name in your Dialogflow console.";
+        finalReply =
+          "I know you are asking for a stock price, but Dialogflow didn't catch the company name! Check the entity name in your Dialogflow console.";
       }
-    } 
+    }
     // --- 2. CRYPTO HANDLER ---
     else if (intentName === "GetCryptoPrice") {
-      let rawCoin = result.parameters.fields?.CryptoName?.stringValue || result.parameters.CryptoName;
+      let rawCoin =
+        result.parameters.fields?.CryptoName?.stringValue ||
+        result.parameters.CryptoName;
       if (Array.isArray(rawCoin)) rawCoin = rawCoin[0];
       const coinName = rawCoin ? rawCoin.toLowerCase().trim() : null;
 
       const cryptoMap = {
-        "bitcoin": "BINANCE:BTCUSDT", "btc": "BINANCE:BTCUSDT",
-        "ethereum": "BINANCE:ETHUSDT", "eth": "BINANCE:ETHUSDT",
-        "dogecoin": "BINANCE:DOGEUSDT", "doge": "BINANCE:DOGEUSDT",
-        "solana": "BINANCE:SOLUSDT", "sol": "BINANCE:SOLUSDT",
-        "ripple": "BINANCE:XRPUSDT", "xrp": "BINANCE:XRPUSDT",
-        "cardano": "BINANCE:ADAUSDT", "ada": "BINANCE:ADAUSDT"
+        bitcoin: "BINANCE:BTCUSDT",
+        btc: "BINANCE:BTCUSDT",
+        ethereum: "BINANCE:ETHUSDT",
+        eth: "BINANCE:ETHUSDT",
+        dogecoin: "BINANCE:DOGEUSDT",
+        doge: "BINANCE:DOGEUSDT",
+        solana: "BINANCE:SOLUSDT",
+        sol: "BINANCE:SOLUSDT",
+        ripple: "BINANCE:XRPUSDT",
+        xrp: "BINANCE:XRPUSDT",
+        cardano: "BINANCE:ADAUSDT",
+        ada: "BINANCE:ADAUSDT",
       };
 
       const symbol = cryptoMap[coinName];
 
       if (symbol) {
         try {
-          const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${process.env.FINNHUB_API_KEY}`);
+          const res = await fetch(
+            `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${process.env.FINNHUB_API_KEY}`,
+          );
           const data = await res.json();
-          
+
           if (data.c) {
             const fxRes = await fetch("https://open.er-api.com/v6/latest/USD");
             const fxData = await fxRes.json();
@@ -247,57 +292,99 @@ app.post("/api/chat", async (req, res) => {
           }
         } catch (error) {
           console.error("Crypto API Error:", error);
-          finalReply = "I ran into a digital glitch fetching that crypto price.";
+          finalReply =
+            "I ran into a digital glitch fetching that crypto price.";
         }
       } else {
-        finalReply = "I currently only track major cryptos like Bitcoin, Ethereum, Doge, Solana, and Ripple. Try one of those!";
+        finalReply =
+          "I currently only track major cryptos like Bitcoin, Ethereum, Doge, Solana, and Ripple. Try one of those!";
       }
-    } 
+    }
     // --- 3. FOREX HANDLER ---
     else if (intentName === "GetForexRate") {
-      let rawCurrency = result.parameters.fields?.ForexName?.stringValue || result.parameters.ForexName;
+      let rawCurrency =
+        result.parameters.fields?.ForexName?.stringValue ||
+        result.parameters.ForexName;
       if (Array.isArray(rawCurrency)) rawCurrency = rawCurrency[0]; // Safety catch
       const currency = rawCurrency ? rawCurrency.toLowerCase().trim() : null;
-      
+
       // "Magic Map" - Map spoken words to their 3-letter ISO currency codes
       const currencyMap = {
-        "us dollar": "USD", "dollar": "USD", "usd": "USD", "american dollar": "USD",
-        "euro": "EUR", "eur": "EUR", "euros": "EUR",
-        "british pound": "GBP", "pound": "GBP", "gbp": "GBP", "sterling": "GBP",
-        "japanese yen": "JPY", "yen": "JPY", "jpy": "JPY",
-        "uae dirham": "AED", "dirham": "AED", "aed": "AED",
-        "australian dollar": "AUD", "aud": "AUD", "aussie dollar": "AUD",
-        "canadian dollar": "CAD", "cad": "CAD",
-        "swiss franc": "CHF", "franc": "CHF", "chf": "CHF",
-        "singapore dollar": "SGD", "sgd": "SGD",
-        "chinese yuan": "CNY", "yuan": "CNY", "cny": "CNY", "renminbi": "CNY", "rmb": "CNY",
-        "new zealand dollar": "NZD", "nzd": "NZD", "kiwi": "NZD",
-        "south african rand": "ZAR", "rand": "ZAR", "zar": "ZAR",
-        "saudi riyal": "SAR", "riyal": "SAR", "sar": "SAR",
-        "kuwaiti dinar": "KWD", "dinar": "KWD", "kwd": "KWD",
-        "omani rial": "OMR", "rial": "OMR", "omr": "OMR"
+        "us dollar": "USD",
+        dollar: "USD",
+        usd: "USD",
+        "american dollar": "USD",
+        euro: "EUR",
+        eur: "EUR",
+        euros: "EUR",
+        "british pound": "GBP",
+        pound: "GBP",
+        gbp: "GBP",
+        sterling: "GBP",
+        "japanese yen": "JPY",
+        yen: "JPY",
+        jpy: "JPY",
+        "uae dirham": "AED",
+        dirham: "AED",
+        aed: "AED",
+        "australian dollar": "AUD",
+        aud: "AUD",
+        "aussie dollar": "AUD",
+        "canadian dollar": "CAD",
+        cad: "CAD",
+        "swiss franc": "CHF",
+        franc: "CHF",
+        chf: "CHF",
+        "singapore dollar": "SGD",
+        sgd: "SGD",
+        "chinese yuan": "CNY",
+        yuan: "CNY",
+        cny: "CNY",
+        renminbi: "CNY",
+        rmb: "CNY",
+        "new zealand dollar": "NZD",
+        nzd: "NZD",
+        kiwi: "NZD",
+        "south african rand": "ZAR",
+        rand: "ZAR",
+        zar: "ZAR",
+        "saudi riyal": "SAR",
+        riyal: "SAR",
+        sar: "SAR",
+        "kuwaiti dinar": "KWD",
+        dinar: "KWD",
+        kwd: "KWD",
+        "omani rial": "OMR",
+        rial: "OMR",
+        omr: "OMR",
       };
       const targetCode = currencyMap[currency];
 
-      if (currency === "rupee" || currency === "inr" || currency === "indian rupee") {
-        finalReply = "The Indian Rupee (INR) is our base currency! 1 INR is always equal to 1 INR. Try asking for the price of the US Dollar or Euro.";
-      } 
-      else if (targetCode) {
+      if (
+        currency === "rupee" ||
+        currency === "inr" ||
+        currency === "indian rupee"
+      ) {
+        finalReply =
+          "The Indian Rupee (INR) is our base currency! 1 INR is always equal to 1 INR. Try asking for the price of the US Dollar or Euro.";
+      } else if (targetCode) {
         try {
           // Fetch rates using the requested currency as the BASE
-          const res = await fetch(`https://open.er-api.com/v6/latest/${targetCode}`);
+          const res = await fetch(
+            `https://open.er-api.com/v6/latest/${targetCode}`,
+          );
           const data = await res.json();
-          
+
           if (data && data.rates && data.rates.INR) {
             const rateInRupees = data.rates.INR;
-            
+
             // Format nicely with the Rupee symbol and commas
-            const formattedRate = new Intl.NumberFormat('en-IN', { 
-              style: 'currency', 
-              currency: 'INR',
-              maximumFractionDigits: 2 
+            const formattedRate = new Intl.NumberFormat("en-IN", {
+              style: "currency",
+              currency: "INR",
+              maximumFractionDigits: 2,
             }).format(rateInRupees);
-            
+
             finalReply = `1 ${targetCode} is currently trading at ${formattedRate}`;
           } else {
             finalReply = `I couldn't fetch the INR conversion rate for ${currency}`;
@@ -306,14 +393,86 @@ app.post("/api/chat", async (req, res) => {
           console.error("Forex API Error:", error);
           finalReply = "I couldn't connect to the currency exchange right now.";
         }
-      } 
-      else {
-        finalReply = "I track major currencies against the Rupee (like USD, Euro, GBP, Yen, and Dirham). Which one do you want to convert to INR?";
+      } else {
+        finalReply =
+          "I track major currencies against the Rupee (like USD, Euro, GBP, Yen, and Dirham). Which one do you want to convert to INR?";
       }
     } // <-- FIX: Properly closed the GetForexRate block here!
+    // --- 4. SIP CALCULATOR HANDLER (Text Only) ---
+    else if (intentName === "CalculateSIP") {
+      // 1. Safely extract parameters from Dialogflow
+      let amount = Number(result.parameters.fields?.amount?.numberValue);
+      let years = Number(result.parameters.fields?.years?.numberValue);
+      let rate = Number(result.parameters.fields?.rate?.numberValue);
 
+      // 2. Set default values if the user forgets to provide one in their sentence
+      if (!amount) amount = 5000;
+      if (!years) years = 10;
+      if (!rate) rate = 12;
+
+      // 3. Perform the SIP Math
+      const monthlyRate = rate / 12 / 100;
+      const months = years * 12;
+      const totalInvested = amount * months;
+
+      // Future Value Formula for SIP
+      const totalWealth = Math.round(
+        amount *
+          ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate) *
+          (1 + monthlyRate),
+      );
+      const estimatedReturns = totalWealth - totalInvested;
+
+      // 4. Construct the final clean text reply
+      finalReply =
+        `If you invest ${formatINR(amount)} every month for ${years} years at an expected return of ${rate}%\n\n` +
+        `• Total Invested: ${formatINR(totalInvested)}\n` +
+        `• Estimated Returns: ${formatINR(estimatedReturns)}\n` +
+        `• Total Wealth Created: ${formatINR(totalWealth)}`;
+    }
+    // --- 5. GOAL-BASED SIP PLANNER ---
+    else if (intentName === "PlanGoalSIP") {
+      let targetAmount = Number(
+        result.parameters.fields?.targetAmount?.numberValue,
+      );
+      let years = Number(result.parameters.fields?.years?.numberValue);
+      let rate = Number(result.parameters.fields?.rate?.numberValue);
+
+      // 1. Smart Defaults (If the user forgets a variable, assume these)
+      if (!targetAmount) targetAmount = 1000000; // Default goal: 10 Lakhs
+      if (!years) years = 10;
+      if (!rate) rate = 12;
+
+      // 2. Guardrails (Prevent impossible calculations)
+      if (rate > 50) rate = 50;
+      if (years > 50) years = 50;
+      if (targetAmount > 1000000000) targetAmount = 1000000000; // Cap at 100 Cr
+
+      // 3. The Reverse SIP Math
+      const monthlyRate = rate / 12 / 100;
+      const months = years * 12;
+
+      // Formula solving for Monthly Investment (P)
+      const monthlyInvestment = Math.round(
+        (targetAmount * monthlyRate) /
+          ((Math.pow(1 + monthlyRate, months) - 1) * (1 + monthlyRate)),
+      );
+
+      const totalInvested = monthlyInvestment * months;
+      const wealthGained = targetAmount - totalInvested;
+
+      // 4. Construct the clean text reply using your formatINR helper
+      finalReply =
+        `To reach your target goal of ${formatINR(targetAmount)} in ${years} years at an expected return of ${rate}%\n\n` +
+        `• Required Monthly SIP: ${formatINR(monthlyInvestment)}\n` +
+        `• Total Invested Out of Pocket: ${formatINR(totalInvested)}\n` +
+        `• Wealth Gained from Returns: ${formatINR(wealthGained)}`;
+    }
     // --- 4. GEMINI AI FALLBACK & EXPLAIN TERM ---
-    else if (intentName === "Default Fallback Intent" || intentName === "ExplainTerm") {
+    else if (
+      intentName === "Default Fallback Intent" ||
+      intentName === "ExplainTerm"
+    ) {
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const prompt = `You are an Finacial Exprert. Explain this clearly in 2-4 sentences: "${text}". No bolding or lists.`;
       const aiResult = await model.generateContent(prompt);
@@ -330,7 +489,7 @@ app.post("/api/chat", async (req, res) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         userId = decoded.id; // Extract the specific user ID from the secure token
       }
-    
+
       const insertQuery =
         "INSERT INTO chat_history (session_id, user_message, bot_response, user_id) VALUES (?, ?, ?, ?)";
       await pool.execute(insertQuery, [sessionId, text, finalReply, userId]);
@@ -340,7 +499,6 @@ app.post("/api/chat", async (req, res) => {
 
     // 7. Send the successful reply back to your React frontend
     return res.json({ reply: finalReply, intent: intentName });
-
   } catch (error) {
     console.error("Chat API Error:", error);
     return res
@@ -352,6 +510,7 @@ app.post("/api/chat", async (req, res) => {
 // ==========================================
 // 3. SECURE HISTORY ROUTE
 // ==========================================
+
 app.get("/api/history", async (req, res) => {
   try {
     // 1. Verify the user's security token
@@ -375,6 +534,7 @@ app.get("/api/history", async (req, res) => {
     res.status(500).json({ error: "Failed to retrieve chat history." });
   }
 });
+
 
 // Start the Server
 app.listen(PORT, () => {
