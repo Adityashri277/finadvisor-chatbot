@@ -76,6 +76,9 @@ A full-stack, AI-powered financial advisor and stock market assistant. FinAdviso
 3. **Data Storage:** The backend securely logs the User ID, Session ID, and AI response to the **MySQL** database.
 4. **Client Response:** The formatted data is returned to the React frontend and displayed in the real-time chat UI.
 
+   <img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/3d942568-1b57-411f-ad02-2c60f163782b" />
+
+
 ---
 
 ## 🚀 Getting Started (Running Locally)
